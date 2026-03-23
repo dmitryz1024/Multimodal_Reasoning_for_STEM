@@ -3,12 +3,12 @@ Model utilities for loading and configuring Vision-Language models.
 """
 
 import os
+import platform
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
 import torch
 from transformers import (
-    AutoModel,
     AutoModelForCausalLM,
     AutoProcessor,
     BitsAndBytesConfig,
@@ -53,6 +53,10 @@ def get_quantization_config(config: ModelConfig) -> Optional[BitsAndBytesConfig]
     """
     Get quantization configuration for model loading.
     """
+    if (config.load_in_4bit or config.load_in_8bit) and not torch.cuda.is_available():
+        print("CUDA is not available; disabling bitsandbytes quantization.")
+        return None
+
     if config.load_in_4bit:
         return BitsAndBytesConfig(
             load_in_4bit=True,
@@ -116,14 +120,33 @@ def load_model_and_processor(
         "pretrained_model_name_or_path": config.name,
         "device_map": config.device_map,
         "trust_remote_code": config.trust_remote_code,
+        "low_cpu_mem_usage": True,
     }
 
     if quantization_config:
         model_kwargs["quantization_config"] = quantization_config
     else:
-        model_kwargs["dtype"] = model_dtype
+        model_kwargs["torch_dtype"] = model_dtype
 
-    model = model_class.from_pretrained(**model_kwargs)
+    try:
+        model = model_class.from_pretrained(**model_kwargs)
+    except Exception as exc:
+        if quantization_config is None:
+            raise
+
+        is_windows = platform.system().lower() == "windows"
+        print(
+            f"Quantized loading failed{' on Windows' if is_windows else ''}: {exc}\n"
+            "Retrying without bitsandbytes quantization."
+        )
+        fallback_kwargs = {
+            "pretrained_model_name_or_path": config.name,
+            "device_map": config.device_map,
+            "trust_remote_code": config.trust_remote_code,
+            "low_cpu_mem_usage": True,
+            "torch_dtype": model_dtype,
+        }
+        model = model_class.from_pretrained(**fallback_kwargs)
     
     print(f"Model loaded: {type(model).__name__}")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -202,9 +225,10 @@ def load_trained_model(
 
     model = model_class.from_pretrained(
         base_model_name,
-        dtype=model_dtype,
+        torch_dtype=model_dtype,
         device_map=config.device_map,
         trust_remote_code=config.trust_remote_code,
+        low_cpu_mem_usage=True,
     )
     
     # Load LoRA adapters

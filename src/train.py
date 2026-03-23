@@ -40,18 +40,26 @@ class TrainConfig:
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
+    lora_target_modules: tuple[str, ...] = ("q_proj", "v_proj", "k_proj", "o_proj")
     load_in_4bit: bool = True
+    load_in_8bit: bool = False
     
     # Data config
     primary_dataset: str = "linxy/LaTeX_OCR"
     primary_subset: str = "human_handwrite"
+    secondary_dataset: str = "deepcopy/MathWriting-human"
     use_secondary: bool = False
     secondary_sample_size: int = 10000
+    max_samples_train: Optional[int] = None
+    max_samples_val: Optional[int] = None
+    image_size: int = 384
+    max_length: int = 512
     
     # Training config
     output_dir: str = "./checkpoints"
     num_epochs: int = 3
     batch_size: int = 4
+    eval_batch_size: int = 8
     gradient_accumulation_steps: int = 4
     learning_rate: float = 2e-4
     weight_decay: float = 0.01
@@ -60,6 +68,10 @@ class TrainConfig:
     bf16: bool = True
     fp16: bool = False
     gradient_checkpointing: bool = True
+    save_total_limit: int = 3
+    load_best_model_at_end: bool = True
+    metric_for_best_model: str = "eval_loss"
+    greater_is_better: bool = False
     
     # Misc
     seed: int = 42
@@ -141,14 +153,22 @@ def load_config(config_path: str) -> TrainConfig:
         lora_r=flat_config.get('lora_r', TrainConfig.lora_r),
         lora_alpha=flat_config.get('lora_alpha', TrainConfig.lora_alpha),
         lora_dropout=flat_config.get('lora_dropout', TrainConfig.lora_dropout),
+        lora_target_modules=tuple(flat_config.get('lora_target_modules', TrainConfig.lora_target_modules)),
         load_in_4bit=flat_config.get('load_in_4bit', TrainConfig.load_in_4bit),
+        load_in_8bit=flat_config.get('load_in_8bit', TrainConfig.load_in_8bit),
         primary_dataset=flat_config.get('primary_dataset', TrainConfig.primary_dataset),
         primary_subset=flat_config.get('primary_subset', TrainConfig.primary_subset),
+        secondary_dataset=flat_config.get('secondary_dataset', TrainConfig.secondary_dataset),
         use_secondary=flat_config.get('use_secondary', TrainConfig.use_secondary),
         secondary_sample_size=flat_config.get('secondary_sample_size', TrainConfig.secondary_sample_size),
+        max_samples_train=flat_config.get('max_samples_train', TrainConfig.max_samples_train),
+        max_samples_val=flat_config.get('max_samples_val', TrainConfig.max_samples_val),
+        image_size=flat_config.get('image_size', TrainConfig.image_size),
+        max_length=flat_config.get('max_length', TrainConfig.max_length),
         output_dir=flat_config.get('output_dir', TrainConfig.output_dir),
         num_epochs=flat_config.get('num_epochs', TrainConfig.num_epochs),
         batch_size=flat_config.get('per_device_train_batch_size', TrainConfig.batch_size),
+        eval_batch_size=flat_config.get('per_device_eval_batch_size', TrainConfig.eval_batch_size),
         gradient_accumulation_steps=flat_config.get('gradient_accumulation_steps', TrainConfig.gradient_accumulation_steps),
         learning_rate=flat_config.get('learning_rate', TrainConfig.learning_rate),
         weight_decay=flat_config.get('weight_decay', TrainConfig.weight_decay),
@@ -157,6 +177,10 @@ def load_config(config_path: str) -> TrainConfig:
         bf16=flat_config.get('bf16', TrainConfig.bf16),
         fp16=flat_config.get('fp16', TrainConfig.fp16),
         gradient_checkpointing=flat_config.get('gradient_checkpointing', TrainConfig.gradient_checkpointing),
+        save_total_limit=flat_config.get('save_total_limit', TrainConfig.save_total_limit),
+        load_best_model_at_end=flat_config.get('load_best_model_at_end', TrainConfig.load_best_model_at_end),
+        metric_for_best_model=flat_config.get('metric_for_best_model', TrainConfig.metric_for_best_model),
+        greater_is_better=flat_config.get('greater_is_better', TrainConfig.greater_is_better),
         seed=flat_config.get('seed', TrainConfig.seed),
         logging_steps=flat_config.get('logging_steps', TrainConfig.logging_steps),
         save_strategy=flat_config.get('save_strategy', TrainConfig.save_strategy),
@@ -244,16 +268,15 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         fp16 = False
     else:
         if bf16 and not getattr(torch.cuda, "is_bf16_supported", lambda: False)():
-            print("WARNING: bf16 not supported on this GPU; falling back to fp16 if enabled.")
+            print("WARNING: bf16 not supported on this GPU; falling back to fp16.")
             bf16 = False
-            if not fp16:
-                print("WARNING: fp16 disabled as well; training will run in fp32.")
+            fp16 = True
 
     return TrainingArguments(
         output_dir=os.path.join(config.output_dir, run_name),
         num_train_epochs=config.num_epochs,
         per_device_train_batch_size=config.batch_size,
-        per_device_eval_batch_size=config.batch_size * 2,
+        per_device_eval_batch_size=config.eval_batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         learning_rate=config.learning_rate,
         weight_decay=config.weight_decay,
@@ -267,10 +290,10 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         logging_dir=os.path.join(config.logging_dir, run_name),
         save_strategy=config.save_strategy,
         eval_strategy=config.eval_strategy,
-        save_total_limit=3,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
+        save_total_limit=config.save_total_limit,
+        load_best_model_at_end=config.load_best_model_at_end,
+        metric_for_best_model=config.metric_for_best_model,
+        greater_is_better=config.greater_is_better,
         report_to=["wandb"] if os.environ.get("WANDB_PROJECT") else ["none"],
         run_name=run_name,
         seed=config.seed,
@@ -310,7 +333,9 @@ def train(
         lora_r=config.lora_r,
         lora_alpha=config.lora_alpha,
         lora_dropout=config.lora_dropout,
+        lora_target_modules=config.lora_target_modules,
         load_in_4bit=config.load_in_4bit,
+        load_in_8bit=config.load_in_8bit,
     )
     
     model, processor = load_model_and_processor(model_config, for_training=True)
@@ -324,6 +349,11 @@ def train(
     primary_ds = load_latex_ocr_dataset(subset=config.primary_subset)
     train_dataset = primary_ds["train"]
     eval_dataset = primary_ds["validation"]
+
+    if config.max_samples_train and len(train_dataset) > config.max_samples_train:
+        train_dataset = train_dataset.shuffle(seed=config.seed).select(range(config.max_samples_train))
+    if config.max_samples_val and len(eval_dataset) > config.max_samples_val:
+        eval_dataset = eval_dataset.shuffle(seed=config.seed).select(range(config.max_samples_val))
     
     # Optionally add secondary dataset
     if config.use_secondary:
@@ -344,7 +374,7 @@ def train(
     # Create data collator
     data_collator = LatexOCRDataCollator(
         processor=processor,
-        max_length=512
+        max_length=config.max_length
     )
     
     # Create training arguments

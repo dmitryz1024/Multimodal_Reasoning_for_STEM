@@ -1,163 +1,275 @@
 # Handwritten Formula to LaTeX Converter
 
-A Vision-Language Model fine-tuned for converting handwritten mathematical formulas into LaTeX format.
+A vision-language project for converting handwritten mathematical formulas into LaTeX.
 
-## 📋 Project Structure
+## Project Structure
 
-```
-├── Dockerfile                   # Docker configuration
-├── docker-compose.yml          # Docker Compose configuration
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── setup.py                     # Package setup
-│
-├── configs/
-│   └── train_config.yaml        # Training configuration
-│
-├── src/
-│   ├── __init__.py
-│   ├── data_utils.py            # Dataset loading and preprocessing
-│   ├── model_utils.py           # Model loading and configuration
-│   ├── metrics.py               # Evaluation metrics
-│   ├── train.py                 # Training script
-│   ├── evaluate.py              # Evaluation script
-│   └── inference.py             # Inference utilities
-│
-├── app/
-│   └── streamlit_app.py         # Streamlit application
-│
-├── notebooks/
-│   └── experiments.ipynb        # Jupyter notebook for experiments
-│
-├── report/
-│   ├── REPORT.md                # Technical report
-│   └── images/                  # Screenshots for report
-│
-└── scripts/
-    ├── run_training.sh          # Training launch script
-    └── run_evaluation.sh        # Evaluation launch script
+```text
+.
+|-- Dockerfile
+|-- docker-compose.yml
+|-- README.md
+|-- requirements.txt
+|-- setup.py
+|-- configs/
+|   |-- train_config.yaml
+|   `-- train_config.local_gpu.yaml
+|-- src/
+|   |-- __init__.py
+|   |-- data_utils.py
+|   |-- evaluate.py
+|   |-- inference.py
+|   |-- metrics.py
+|   |-- model_utils.py
+|   `-- train.py
+|-- app/
+|   `-- streamlit_app.py
+|-- notebooks/
+|   |-- colab_training.ipynb
+|   `-- experiments.ipynb
+|-- scripts/
+|   `-- upload_to_hub.py
+`-- report/
+    |-- REPORT.md
+    `-- images/
 ```
 
-## 🚀 Quick Start
+## What Works Today
 
-### Option 1: Using Docker (Recommended)
+- Training via `python -m src.train`
+- Evaluation via `python -m src.evaluate`
+- Streamlit app via `streamlit run app/streamlit_app.py`
+- Local Jupyter notebooks from `notebooks/`
+- Docker image build and Docker Compose services
 
-#### Prerequisites
-- Docker with NVIDIA support (nvidia-docker2)
-- NVIDIA GPU (optional but recommended for training)
+## Requirements
 
-#### Build and Run
-
-```bash
-# Clone the repository
-git clone https://github.com/dmitryz1024/Multimodal_Reasoning_for_STEM.git
-cd Multimodal_Reasoning_for_STEM
-
-# Build the Docker image
-docker build -t latex-ocr .
-
-# Run Streamlit app
-docker run --gpus all -p 8501:8501 -v $(pwd):/app latex-ocr streamlit run app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
-
-# Or use docker-compose
-docker-compose up latex-ocr
-```
-
-#### Training with Docker
-
-```bash
-# Run training
-docker run --gpus all -v $(pwd):/app latex-ocr python src/train.py --config configs/train_config.yaml
-
-# Or with docker-compose
-docker-compose up train
-```
-
-### Option 2: Local Installation (optional)
-
-#### Prerequisites
 - Python 3.10+
-- PyTorch с CUDA (если есть GPU). Если нет, модель будет обучаться медленнее на CPU.
+- NVIDIA GPU recommended for training
+- Hugging Face account/token for downloading models and datasets
+
+## Local Setup
+
+1. Clone the repository:
 
 ```bash
-# Clone the repository
 git clone https://github.com/dmitryz1024/Multimodal_Reasoning_for_STEM.git
 cd Multimodal_Reasoning_for_STEM
+```
 
-# Create virtual environment
+2. Create and activate a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+On Windows PowerShell:
+
+```powershell
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-env\Scripts\activate   # Windows
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
 
-# Install dependencies
+3. Install PyTorch with CUDA first if you plan to train on GPU, then install project dependencies:
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 ```
 
-### 2. Training
+4. Optional but recommended: verify that CUDA is visible:
 
 ```bash
-# Run training with default config
-python src/train.py --config configs/train_config.yaml
-
-# Or with custom parameters
-python src/train.py \
-    --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
-    --dataset "linxy/LaTeX_OCR" \
-    --subset "human_handwrite" \
-    --epochs 3 \
-    --batch_size 4
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 ```
 
-### 3. Evaluation
+5. Log in to Hugging Face:
 
 ```bash
-# Evaluate on test set
-python src/evaluate.py \
-    --model_path ./checkpoints/best_model \
-    --dataset "linxy/LaTeX_OCR" \
-    --subset "human_handwrite"
+huggingface-cli login
 ```
 
-### 4. Run Streamlit App
+## Training
+
+Default training:
+
+```bash
+python -m src.train --config configs/train_config.yaml
+```
+
+Safer local 16 GB GPU preset:
+
+```bash
+python -m src.train --config configs/train_config.local_gpu.yaml --run_name local_gpu_run
+```
+
+Training with CLI overrides:
+
+```bash
+python -m src.train \
+  --config configs/train_config.local_gpu.yaml \
+  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
+  --dataset "linxy/LaTeX_OCR" \
+  --subset "human_handwrite" \
+  --epochs 3 \
+  --batch_size 2 \
+  --run_name custom_run
+```
+
+Train both experimental setups:
+
+```bash
+python -m src.train --config configs/train_config.local_gpu.yaml --train_all
+```
+
+Notes:
+
+- `--dataset` now overrides the primary Hugging Face dataset used for training.
+- If the custom dataset does not use a Hugging Face subset/config, omit `--subset`.
+- The dataset still needs to match the expected image/text structure used by the project.
+- The secondary dataset is controlled by config via `secondary_dataset` and `use_secondary`.
+
+## Evaluation
+
+Evaluate a single adapter checkpoint:
+
+```bash
+python -m src.evaluate \
+  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
+  --adapter_path ./checkpoints/local_gpu_run/final \
+  --dataset "linxy/LaTeX_OCR" \
+  --subset "human_handwrite" \
+  --eval_mode sft \
+  --output evaluation_results.json
+```
+
+Run full evaluation across zero-shot, one-shot, and available fine-tuned checkpoints:
+
+```bash
+python -m src.evaluate \
+  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
+  --checkpoint_latex_ocr ./checkpoints/sft_latex_ocr_only/final \
+  --checkpoint_combined ./checkpoints/sft_latex_ocr_mathwriting/final \
+  --dataset "linxy/LaTeX_OCR" \
+  --subset "human_handwrite" \
+  --eval_mode all
+```
+
+## Inference
+
+Command line inference:
+
+```bash
+python -m src.inference path/to/image.png --model "HuggingFaceTB/SmolVLM-256M-Instruct"
+```
+
+With a fine-tuned checkpoint:
+
+```bash
+python -m src.inference path/to/image.png \
+  --model "HuggingFaceTB/SmolVLM-256M-Instruct" \
+  --checkpoint ./checkpoints/local_gpu_run/final
+```
+
+## Streamlit App
+
+Run locally:
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-## 📊 Experimental Results
+The app now auto-selects a trained checkpoint if one exists in `checkpoints/`.
+For the internship demo, keep the checkpoint path pointed at one of your fine-tuned runs.
 
-| Setup | BLEU | Exact Match | Edit Distance |
-|-------|------|-------------|---------------|
-| Zero-shot | TBD | TBD | TBD |
-| One-shot | TBD | TBD | TBD |
-| SFT (LaTeX_OCR only) | TBD | TBD | TBD |
-| SFT (LaTeX_OCR + MathWriting) | TBD | TBD | TBD |
+If you use private/gated Hugging Face assets, set `HF_TOKEN` in your environment before launch.
 
-## 🔗 Model Checkpoints
+## Jupyter Notebooks
 
-- **Zero-shot model**: [HuggingFace Link]
-- **SFT (LaTeX_OCR)**: [HuggingFace Link]
-- **SFT (LaTeX_OCR + MathWriting)**: [HuggingFace Link]
+The notebooks are adapted for local execution:
 
-## 📝 Technical Report
+- `notebooks/colab_training.ipynb`
+- `notebooks/experiments.ipynb`
 
-Все результаты, таблицы и скриншоты сохраняйте в `report/`:
-- `report/REPORT.md` — сводный технический отчет (setup, гиперпараметры, метрики, выводы).
-- `report/images/` — скриншоты приложения, примеры работы, графики обучения.
+Start Jupyter from the repository root:
 
-Папка `report` монтируется в контейнер при запуске через Docker Compose, поэтому данные сохраняются локально и остаются после остановки контейнера.
+```bash
+jupyter lab
+```
 
-## 📦 Datasets Used
+## Docker
 
-- [linxy/LaTeX_OCR](https://huggingface.co/datasets/linxy/LaTeX_OCR) - Primary dataset
-- [deepcopy/MathWriting-human](https://huggingface.co/datasets/deepcopy/MathWriting-human) - Additional training data
+Build the image:
 
-## 🛠️ Model Options
+```bash
+docker build -t latex-ocr .
+```
 
-Supported models:
-- `HuggingFaceTB/SmolVLM-256M-Instruct` (recommended for limited resources)
+Run the Streamlit app:
+
+```bash
+docker run --gpus all -p 8501:8501 -v $(pwd):/app latex-ocr \
+  streamlit run app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+Run training:
+
+```bash
+docker run --gpus all -v $(pwd):/app latex-ocr \
+  python -m src.train --config configs/train_config.yaml
+```
+
+Docker Compose:
+
+```bash
+docker compose up latex-ocr
+docker compose up train
+```
+
+## Uploading Trained Checkpoints
+
+If your `.env` already contains `HF_TOKEN`, you can publish checkpoints with:
+
+```bash
+python scripts/upload_to_hub.py \
+  --local_path ./checkpoints/sft_latex_ocr_only/final \
+  --repo_id YOUR_USERNAME/latex-ocr-smolvlm-latex-only
+```
+
+and
+
+```bash
+python scripts/upload_to_hub.py \
+  --local_path ./checkpoints/sft_latex_ocr_mathwriting/final \
+  --repo_id YOUR_USERNAME/latex-ocr-smolvlm-combined
+```
+
+After upload, put the public model links into this README and into `report/REPORT.md`.
+
+## Datasets
+
+- `linxy/LaTeX_OCR`
+- `deepcopy/MathWriting-human`
+
+## Model Options
+
+Tested/default model:
+
+- `HuggingFaceTB/SmolVLM-256M-Instruct`
+
+Also referenced in the code:
+
 - `Qwen/Qwen2-VL-2B-Instruct`
 - `Qwen/Qwen2.5-VL-3B-Instruct`
+
+## Known Gaps
+
+- `setup.py` does not yet mirror the full dependency set from `requirements.txt`.
+- Custom datasets must follow the same column conventions expected by the preprocessing code.
+- You still need to fill in the final public checkpoint links after uploading trained runs.
 
 ## License
 

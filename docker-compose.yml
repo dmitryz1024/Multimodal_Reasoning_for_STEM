@@ -24,4 +24,4 @@ services:
     volumes:
       - .:/app
       - ./checkpoints:/app/checkpoints
-    command: ["python", "src/train.py", "--config", "configs/train_config.yaml"]
+    command: ["python", "-m", "src.train", "--config", "configs/train_config.yaml"]

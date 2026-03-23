@@ -38,4 +38,4 @@ RUN mkdir -p checkpoints report/images
 EXPOSE 8501
 
 # Default command
-CMD ["python", "src/train.py", "--config", "configs/train_config.yaml"]
+CMD ["python", "-m", "src.train", "--config", "configs/train_config.yaml"]

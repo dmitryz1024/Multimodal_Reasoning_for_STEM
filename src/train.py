@@ -46,7 +46,7 @@ class TrainConfig:
     
     # Data config
     primary_dataset: str = "linxy/LaTeX_OCR"
-    primary_subset: str = "human_handwrite"
+    primary_subset: Optional[str] = "human_handwrite"
     secondary_dataset: str = "deepcopy/MathWriting-human"
     use_secondary: bool = False
     secondary_sample_size: int = 10000
@@ -346,7 +346,10 @@ def train(
     
     # Load datasets
     logger.info("Loading datasets...")
-    primary_ds = load_latex_ocr_dataset(subset=config.primary_subset)
+    primary_ds = load_latex_ocr_dataset(
+        dataset_name=config.primary_dataset,
+        subset=config.primary_subset
+    )
     train_dataset = primary_ds["train"]
     eval_dataset = primary_ds["validation"]
 
@@ -359,6 +362,7 @@ def train(
     if config.use_secondary:
         print(f"\nAdding secondary dataset (sample size: {config.secondary_sample_size})...")
         secondary_ds = load_mathwriting_dataset(
+            dataset_name=config.secondary_dataset,
             split="train",
             sample_size=config.secondary_sample_size
         )
@@ -525,7 +529,10 @@ def main():
     if args.model_name:
         config.model_name = args.model_name
     if args.dataset:
+        dataset_changed = config.primary_dataset != args.dataset
         config.primary_dataset = args.dataset
+        if dataset_changed and not args.subset:
+            config.primary_subset = None
     if args.subset:
         config.primary_subset = args.subset
     if args.epochs:

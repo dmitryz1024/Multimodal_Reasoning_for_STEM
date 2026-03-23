@@ -25,7 +25,35 @@ class DataConfig:
     max_length: int = 512
 
 
+def load_hf_dataset(
+    dataset_name: str,
+    subset: Optional[str] = None,
+    split: Optional[str] = None
+) -> Union[Dataset, DatasetDict]:
+    """
+    Load a Hugging Face dataset with an optional subset/config and split.
+    """
+    subset_info = f" with subset: {subset}" if subset else ""
+    split_info = f", split: {split}" if split else ""
+    print(f"Loading dataset: {dataset_name}{subset_info}{split_info}")
+
+    if split:
+        if subset:
+            ds = load_dataset(dataset_name, subset, split=split)
+        else:
+            ds = load_dataset(dataset_name, split=split)
+    else:
+        if subset:
+            ds = load_dataset(dataset_name, subset)
+        else:
+            ds = load_dataset(dataset_name)
+
+    print(f"Loaded dataset: {ds}")
+    return ds
+
+
 def load_latex_ocr_dataset(
+    dataset_name: str = "linxy/LaTeX_OCR",
     subset: str = "human_handwrite",
     split: Optional[str] = None
 ) -> Union[Dataset, DatasetDict]:
@@ -40,18 +68,11 @@ def load_latex_ocr_dataset(
     Returns:
         Dataset or DatasetDict
     """
-    print(f"Loading LaTeX_OCR dataset with subset: {subset}")
-    
-    if split:
-        ds = load_dataset("linxy/LaTeX_OCR", subset, split=split)
-    else:
-        ds = load_dataset("linxy/LaTeX_OCR", subset)
-    
-    print(f"Loaded dataset: {ds}")
-    return ds
+    return load_hf_dataset(dataset_name=dataset_name, subset=subset, split=split)
 
 
 def load_mathwriting_dataset(
+    dataset_name: str = "deepcopy/MathWriting-human",
     split: Optional[str] = None,
     sample_size: Optional[int] = None
 ) -> Union[Dataset, DatasetDict]:
@@ -65,18 +86,12 @@ def load_mathwriting_dataset(
     Returns:
         Dataset or DatasetDict
     """
-    print("Loading MathWriting-human dataset...")
-    
-    if split:
-        ds = load_dataset("deepcopy/MathWriting-human", split=split)
-    else:
-        ds = load_dataset("deepcopy/MathWriting-human")
+    ds = load_hf_dataset(dataset_name=dataset_name, split=split)
     
     if sample_size and isinstance(ds, Dataset) and len(ds) > sample_size:
         ds = ds.shuffle(seed=42).select(range(sample_size))
         print(f"Sampled {sample_size} examples from dataset")
     
-    print(f"Loaded dataset: {ds}")
     return ds
 
 
@@ -268,7 +283,10 @@ def prepare_datasets(config: DataConfig) -> Tuple[Dataset, Dataset, Dataset]:
         Tuple of (train_dataset, val_dataset, test_dataset)
     """
     # Load primary dataset
-    primary_ds = load_latex_ocr_dataset(subset=config.primary_subset)
+    primary_ds = load_latex_ocr_dataset(
+        dataset_name=config.primary_dataset,
+        subset=config.primary_subset
+    )
     
     train_ds = primary_ds["train"]
     val_ds = primary_ds["validation"]
@@ -284,6 +302,7 @@ def prepare_datasets(config: DataConfig) -> Tuple[Dataset, Dataset, Dataset]:
     # Optionally add secondary dataset
     if config.use_secondary:
         secondary_ds = load_mathwriting_dataset(
+            dataset_name=config.secondary_dataset,
             split="train",
             sample_size=config.secondary_sample_size
         )

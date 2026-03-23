@@ -23,7 +23,7 @@ class EvalConfig:
     model_name: str = "HuggingFaceTB/SmolVLM-256M-Instruct"
     adapter_path: Optional[str] = None  # Path to fine-tuned adapters
     dataset: str = "linxy/LaTeX_OCR"
-    subset: str = "human_handwrite"
+    subset: Optional[str] = "human_handwrite"
     split: str = "test"
     num_samples: Optional[int] = 70  # As specified in task
     batch_size: int = 1
@@ -234,7 +234,11 @@ def run_full_evaluation(
     
     # Load test dataset
     print("Loading test dataset...")
-    test_ds = load_latex_ocr_dataset(subset=config.subset, split=config.split)
+    test_ds = load_latex_ocr_dataset(
+        dataset_name=config.dataset,
+        subset=config.subset,
+        split=config.split
+    )
     print(f"Test samples: {len(test_ds)}")
     
     # 1. Zero-shot evaluation
@@ -365,7 +369,7 @@ def main():
     parser.add_argument(
         "--subset",
         type=str,
-        default="human_handwrite",
+        default=None,
         help="Dataset subset"
     )
     parser.add_argument(
@@ -396,11 +400,17 @@ def main():
     
     args = parser.parse_args()
     
+    subset = args.subset
+    if args.dataset != EvalConfig.dataset and subset is None:
+        subset = None
+    elif subset is None:
+        subset = EvalConfig.subset
+
     config = EvalConfig(
         model_name=args.model_name,
         adapter_path=args.adapter_path,
         dataset=args.dataset,
-        subset=args.subset,
+        subset=subset,
         split=args.split,
         num_samples=args.num_samples
     )
@@ -414,7 +424,11 @@ def main():
         )
     else:
         # Single mode evaluation
-        test_ds = load_latex_ocr_dataset(subset=config.subset, split=config.split)
+        test_ds = load_latex_ocr_dataset(
+            dataset_name=config.dataset,
+            subset=config.subset,
+            split=config.split
+        )
         
         if args.adapter_path:
             model = VLMForLatexOCR.from_pretrained(

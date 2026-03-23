@@ -16,8 +16,8 @@ from transformers import (
     EarlyStoppingCallback,
 )
 
-from data_utils import load_latex_ocr_dataset, load_mathwriting_dataset
-from model_utils import ModelConfig, load_model_and_processor, save_model
+from .data_utils import load_latex_ocr_dataset, load_mathwriting_dataset
+from .model_utils import ModelConfig, load_model_and_processor, save_model
 
 
 @dataclass

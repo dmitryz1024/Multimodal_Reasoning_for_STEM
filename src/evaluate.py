@@ -12,9 +12,9 @@ from dataclasses import dataclass
 import torch
 from tqdm import tqdm
 
-from data_utils import load_latex_ocr_dataset
-from model_utils import VLMForLatexOCR
-from metrics import MetricTracker, format_metrics
+from .data_utils import load_latex_ocr_dataset
+from .model_utils import VLMForLatexOCR
+from .metrics import MetricTracker, format_metrics
 
 
 @dataclass

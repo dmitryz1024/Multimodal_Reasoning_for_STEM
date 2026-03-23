@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from model_utils import VLMForLatexOCR
+from .model_utils import VLMForLatexOCR
 
 
 class LatexOCRInference:

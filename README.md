@@ -42,8 +42,8 @@ A Vision-Language Model fine-tuned for converting handwritten mathematical formu
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/handwritten-latex-ocr.git
-cd handwritten-latex-ocr
+git clone [https://github.com/YOUR_USERNAME/handwritten-latex-ocr.git](https://github.com/dmitryz1024/Multimodal_Reasoning_for_STEM.git)
+cd Multimodal_Reasoning_for_STEM
 
 # Create virtual environment
 python -m venv venv

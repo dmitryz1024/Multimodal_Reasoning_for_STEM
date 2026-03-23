@@ -104,7 +104,7 @@ class LatexOCRDataCollator:
     Handles image-text pairs for Vision-Language models.
     """
     
-    def __init__(self, processor: AutoProcessor, max_length: int = 512):
+    def __init__(self, processor: AutoProcessor, max_length: int = 2048):
         self.processor = processor
         self.max_length = max_length
         self.system_prompt = "Convert the handwritten mathematical formula to LaTeX code."
@@ -152,7 +152,7 @@ class LatexOCRDataCollator:
             text=texts,
             return_tensors="pt",
             padding=True,
-            truncation=True,
+            truncation=False,  # Disable truncation to avoid image token mismatch
             max_length=self.max_length,
         )
         
@@ -170,6 +170,7 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
     is_cuda = torch.cuda.is_available()
     bf16 = config.bf16
     fp16 = config.fp16
+    num_workers = 4 if is_cuda else 0  # Disable multiprocessing on CPU
 
     if not is_cuda:
         print("WARNING: CUDA is not available, forcing fp16/bf16 off and using CPU.")
@@ -205,7 +206,7 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         report_to=["wandb"] if os.environ.get("WANDB_PROJECT") else ["none"],
         run_name=run_name,
         seed=config.seed,
-        dataloader_num_workers=4,
+        dataloader_num_workers=num_workers,
         remove_unused_columns=False,
     )
 

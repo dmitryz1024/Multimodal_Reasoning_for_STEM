@@ -236,7 +236,7 @@ def main():
         if image_source is not None:
             # Display uploaded image
             image = Image.open(image_source).convert("RGB")
-            st.image(image, caption="Input Image", use_column_width=True)
+            st.image(image, caption="Input Image", width="stretch")
             
             # Convert button
             if st.button("🔮 Convert to LaTeX", type="primary"):
@@ -281,7 +281,7 @@ def main():
             st.markdown("**Rendered Formula:**")
             try:
                 rendered_img = render_latex(latex_output)
-                st.image(rendered_img, caption="Rendered LaTeX", use_column_width=True)
+                st.image(rendered_img, caption="Rendered LaTeX", width="stretch")
             except Exception as e:
                 st.error(f"Could not render LaTeX: {e}")
                 st.info("The LaTeX code is still valid, but rendering failed.")
@@ -307,24 +307,6 @@ def main():
                     )
         else:
             st.info("👆 Upload an image and click 'Convert to LaTeX' to see results")
-    
-    # Example section
-    st.markdown("---")
-    st.subheader("📚 Examples")
-    
-    example_col1, example_col2, example_col3 = st.columns(3)
-    
-    with example_col1:
-        st.markdown("**Quadratic Formula**")
-        st.latex(r"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}")
-    
-    with example_col2:
-        st.markdown("**Integral**")
-        st.latex(r"\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}")
-    
-    with example_col3:
-        st.markdown("**Matrix**")
-        st.latex(r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}")
     
     # Footer
     st.markdown("---")

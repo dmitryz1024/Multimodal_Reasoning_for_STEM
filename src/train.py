@@ -4,6 +4,8 @@ Training script for Handwritten LaTeX OCR.
 
 import os
 import argparse
+import logging
+import time
 from typing import Dict, Optional
 from dataclasses import dataclass
 
@@ -13,8 +15,17 @@ from transformers import (
     TrainingArguments,
     Trainer,
     AutoProcessor,
+    TrainerCallback,
     EarlyStoppingCallback,
 )
+
+# Logging setup
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 from .data_utils import load_latex_ocr_dataset, load_mathwriting_dataset
 from .model_utils import ModelConfig, load_model_and_processor, save_model
@@ -53,8 +64,63 @@ class TrainConfig:
     # Misc
     seed: int = 42
     logging_steps: int = 10
+    logging_strategy: str = "steps"
+    logging_dir: str = "./logs"
     save_strategy: str = "epoch"
     eval_strategy: str = "epoch"
+
+
+class DetailedProgressCallback(TrainerCallback):
+    """Callback to print detailed training progress and ETA."""
+
+    def __init__(self):
+        self.step_times = []
+        self.last_printed_step = 0
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.train_start_time = time.time()
+        logger.info("Training started: %s", args.run_name)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        logs = kwargs.get("logs", {})
+        now = time.time()
+        if state.global_step > 0:
+            self.step_times.append(now - self._last_step_time if hasattr(self, '_last_step_time') else 0)
+        self._last_step_time = now
+
+        total = float(state.max_steps)
+        completed = float(state.global_step)
+        pct = (completed / total) * 100 if total > 0 else 0
+
+        avg_step = sum(self.step_times) / len(self.step_times) if self.step_times else 0
+        remaining_steps = max(state.max_steps - state.global_step, 0)
+        eta = remaining_steps * avg_step
+
+        loss = logs.get('loss', None)
+        info = f"Epoch {state.epoch:.2f} | Step {state.global_step}/{state.max_steps} ({pct:.1f}%)"
+        if loss is not None:
+            info += f" | loss={loss:.4f}"
+        if eta >= 0 and avg_step > 0:
+            info += f" | ETA {int(eta // 3600):02d}:{int((eta % 3600) // 60):02d}:{int(eta % 60):02d}"
+
+        # Log every logging_steps or at end of epoch
+        if state.global_step % args.logging_steps == 0 or state.global_step == state.max_steps:
+            logger.info(info)
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        elapsed = time.time() - self.train_start_time
+        logger.info("Epoch %.2f complete. Total elapsed time: %s", state.epoch, format_time(elapsed))
+
+    def on_train_end(self, args, state, control, **kwargs):
+        total = time.time() - self.train_start_time
+        logger.info("Training finished. Total time: %s", format_time(total))
+
+
+def format_time(seconds: float) -> str:
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def load_config(config_path: str) -> TrainConfig:
@@ -197,6 +263,8 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         fp16=fp16,
         gradient_checkpointing=config.gradient_checkpointing,
         logging_steps=config.logging_steps,
+        logging_strategy=config.logging_strategy,
+        logging_dir=os.path.join(config.logging_dir, run_name),
         save_strategy=config.save_strategy,
         eval_strategy=config.eval_strategy,
         save_total_limit=3,
@@ -208,6 +276,7 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         seed=config.seed,
         dataloader_num_workers=num_workers,
         remove_unused_columns=False,
+        disable_tqdm=False,
     )
 
 
@@ -224,9 +293,9 @@ def train(
         run_name: Name for this training run
         wandb_project: Optional W&B project name
     """
-    print("=" * 60)
-    print(f"Starting training: {run_name}")
-    print("=" * 60)
+    logger.info("%s", "=" * 60)
+    logger.info("Starting training: %s", run_name)
+    logger.info("%s", "=" * 60)
     
     # Set up wandb
     if wandb_project:
@@ -251,7 +320,7 @@ def train(
         model.gradient_checkpointing_enable()
     
     # Load datasets
-    print("\nLoading datasets...")
+    logger.info("Loading datasets...")
     primary_ds = load_latex_ocr_dataset(subset=config.primary_subset)
     train_dataset = primary_ds["train"]
     eval_dataset = primary_ds["validation"]
@@ -288,18 +357,21 @@ def train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        callbacks=[
+            DetailedProgressCallback(),
+            EarlyStoppingCallback(early_stopping_patience=3),
+        ],
     )
     
     # Train
-    print("\nStarting training...")
+    logger.info("Starting training...")
     trainer.train()
     
     # Save final model
     final_output_dir = os.path.join(config.output_dir, run_name, "final")
     save_model(model, processor, final_output_dir)
     
-    print(f"\nTraining complete! Model saved to: {final_output_dir}")
+    logger.info("Training complete! Model saved to: %s", final_output_dir)
     
     return model, processor
 

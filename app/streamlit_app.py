@@ -18,6 +18,74 @@ matplotlib.use('Agg')
 # Import our modules
 from src.inference import LatexOCRInference
 
+# Auto-login to Hugging Face if token is available
+import os
+from huggingface_hub import login
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    try:
+        login(hf_token)
+        print("Successfully logged in to Hugging Face")
+    except Exception as e:
+        print(f"Failed to login to Hugging Face: {e}")
+
+
+def is_latex_formula(text: str) -> bool:
+    """
+    Check if the generated text appears to be a LaTeX mathematical formula.
+    
+    Args:
+        text: Generated text to check
+    
+    Returns:
+        True if text appears to be LaTeX formula, False otherwise
+    """
+    text = text.strip()
+    
+    if not text or len(text) < 3:
+        return False
+    
+    # LaTeX mathematical symbols and commands
+    latex_indicators = [
+        '\\', '$', '^', '_', 
+        '\\frac', '\\int', '\\sum', '\\prod', '\\sqrt', '\\log', '\\ln', '\\sin', '\\cos', '\\tan',
+        '\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\zeta', '\\eta', '\\theta', 
+        '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', 
+        '\\tau', '\\upsilon', '\\phi', '\\chi', '\\psi', '\\omega',
+        '\\Delta', '\\Gamma', '\\Lambda', '\\Omega', '\\Phi', '\\Pi', '\\Sigma', '\\Theta',
+        '\\leq', '\\geq', '\\neq', '\\approx', '\\infty', '\\partial', '\\nabla', '\\int',
+        '\\bigcup', '\\bigcap', '\\bigcup', '\\bigcap', '\\in', '\\notin', '\\subset', '\\supset'
+    ]
+    
+    # Check for LaTeX symbols
+    has_latex_symbols = any(indicator in text for indicator in latex_indicators)
+    
+    # Check for regular words (indicating non-formula text)
+    words = text.split()
+    regular_words = [word for word in words if word.isalpha() and len(word) > 3]
+    has_regular_words = len(regular_words) > 2  # More than 2 long words likely indicate regular text
+    
+    # If has LaTeX symbols and no regular words, likely a formula
+    if has_latex_symbols and not has_regular_words:
+        return True
+    
+    # If has regular words and no LaTeX symbols, likely not a formula
+    if has_regular_words and not has_latex_symbols:
+        return False
+    
+    # Ambiguous case: check length and other heuristics
+    if len(text) > 200:  # Too long for a formula
+        return False
+    
+    # Check for mathematical patterns
+    math_patterns = ['=', '+', '-', '*', '/', '(', ')', '[', ']', '{', '}', '|']
+    math_chars = sum(1 for char in text if char in math_patterns)
+    
+    if math_chars > len(text) * 0.3:  # More than 30% math characters
+        return True
+    
+    return False
+
 
 # Page configuration
 st.set_page_config(
@@ -254,6 +322,10 @@ def main():
                                 temperature=temperature
                             )
                         
+                        # Check if output is actually a LaTeX formula
+                        if not is_latex_formula(latex_output):
+                            latex_output = "Не обнаружена LaTeX-конвертируемая формула"
+                        
                         # Store result in session state
                         st.session_state['latex_output'] = latex_output
                         st.session_state['has_result'] = True
@@ -277,34 +349,37 @@ def main():
                 )
             )
             
-            # Rendered output
-            st.markdown("**Rendered Formula:**")
-            try:
-                rendered_img = render_latex(latex_output)
-                st.image(rendered_img, caption="Rendered LaTeX", width="stretch")
-            except Exception as e:
-                st.error(f"Could not render LaTeX: {e}")
-                st.info("The LaTeX code is still valid, but rendering failed.")
-            
-            # Download buttons
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.download_button(
-                    "💾 Download LaTeX",
-                    data=latex_output,
-                    file_name="formula.tex",
-                    mime="text/plain"
-                )
-            with col_b:
-                if 'rendered_img' in dir():
-                    buf = io.BytesIO()
-                    rendered_img.save(buf, format='PNG')
+            # Rendered output (only if it's actually LaTeX)
+            if latex_output != "Не обнаружена LaTeX-конвертируемая формула":
+                st.markdown("**Rendered Formula:**")
+                try:
+                    rendered_img = render_latex(latex_output)
+                    st.image(rendered_img, caption="Rendered LaTeX", width="stretch")
+                except Exception as e:
+                    st.error(f"Could not render LaTeX: {e}")
+                    st.info("The LaTeX code is still valid, but rendering failed.")
+                
+                # Download buttons
+                col_a, col_b = st.columns(2)
+                with col_a:
                     st.download_button(
-                        "🖼️ Download Image",
-                        data=buf.getvalue(),
-                        file_name="formula.png",
-                        mime="image/png"
+                        "💾 Download LaTeX",
+                        data=latex_output,
+                        file_name="formula.tex",
+                        mime="text/plain"
                     )
+                with col_b:
+                    if 'rendered_img' in dir():
+                        buf = io.BytesIO()
+                        rendered_img.save(buf, format='PNG')
+                        st.download_button(
+                            "🖼️ Download Image",
+                            data=buf.getvalue(),
+                            file_name="formula.png",
+                            mime="image/png"
+                        )
+            else:
+                st.info("💡 Загрузите изображение с математической формулой для конвертации в LaTeX")
         else:
             st.info("👆 Upload an image and click 'Convert to LaTeX' to see results")
     

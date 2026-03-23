@@ -80,6 +80,8 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 ```
 
+`wandb` is optional. The project now trains without it by default. If you want Weights & Biases logging, install it separately with `pip install wandb` and pass `--wandb_project your-project-name`.
+
 4. Optional but recommended: verify that CUDA is visible:
 
 ```bash
@@ -104,6 +106,12 @@ Safer local 16 GB GPU preset:
 
 ```bash
 python -m src.train --config configs/train_config.local_gpu.yaml --run_name local_gpu_run
+```
+
+Explicitly disable wandb from the CLI even if a config enables it:
+
+```bash
+python -m src.train --config configs/train_config.yaml --no_wandb
 ```
 
 Training with CLI overrides:

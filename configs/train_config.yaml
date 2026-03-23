@@ -77,7 +77,7 @@ evaluation:
 
 # Logging
 logging:
-  use_wandb: true
-  wandb_project: "handwritten-latex-ocr"
+  use_wandb: false
+  wandb_project: null
   wandb_run_name: null  # Auto-generated if null
   log_level: "info"

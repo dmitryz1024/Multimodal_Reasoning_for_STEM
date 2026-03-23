@@ -80,6 +80,8 @@ class TrainConfig:
     logging_dir: str = "./logs"
     save_strategy: str = "epoch"
     eval_strategy: str = "epoch"
+    use_wandb: bool = False
+    wandb_project: Optional[str] = None
 
 
 class DetailedProgressCallback(TrainerCallback):
@@ -142,7 +144,7 @@ def load_config(config_path: str) -> TrainConfig:
     
     # Flatten nested config
     flat_config = {}
-    for section in ['model', 'data', 'training']:
+    for section in ['model', 'data', 'training', 'preprocessing', 'logging']:
         if section in config_dict:
             flat_config.update(config_dict[section])
     
@@ -185,6 +187,8 @@ def load_config(config_path: str) -> TrainConfig:
         logging_steps=flat_config.get('logging_steps', TrainConfig.logging_steps),
         save_strategy=flat_config.get('save_strategy', TrainConfig.save_strategy),
         eval_strategy=flat_config.get('eval_strategy', TrainConfig.eval_strategy),
+        use_wandb=flat_config.get('use_wandb', TrainConfig.use_wandb),
+        wandb_project=flat_config.get('wandb_project', TrainConfig.wandb_project),
     )
 
 
@@ -254,7 +258,7 @@ class LatexOCRDataCollator:
         return batch_encoding
 
 
-def create_training_args(config: TrainConfig, run_name: str) -> TrainingArguments:
+def create_training_args(config: TrainConfig, run_name: str, use_wandb: bool = False) -> TrainingArguments:
     """Create HuggingFace TrainingArguments from config."""
     # Detect device support and avoid unsupported precision mode
     is_cuda = torch.cuda.is_available()
@@ -294,13 +298,49 @@ def create_training_args(config: TrainConfig, run_name: str) -> TrainingArgument
         load_best_model_at_end=config.load_best_model_at_end,
         metric_for_best_model=config.metric_for_best_model,
         greater_is_better=config.greater_is_better,
-        report_to=["wandb"] if os.environ.get("WANDB_PROJECT") else ["none"],
+        report_to=["wandb"] if use_wandb else ["none"],
         run_name=run_name,
         seed=config.seed,
         dataloader_num_workers=num_workers,
         remove_unused_columns=False,
         disable_tqdm=False,
     )
+
+
+def disable_wandb() -> None:
+    """Force-disable Weights & Biases integration for this process."""
+    os.environ["WANDB_DISABLED"] = "true"
+    os.environ.pop("WANDB_PROJECT", None)
+
+
+def maybe_enable_wandb(config: TrainConfig, run_name: str, wandb_project: Optional[str] = None) -> bool:
+    """
+    Initialize Weights & Biases if explicitly enabled.
+
+    Returns:
+        True if wandb logging is active, otherwise False.
+    """
+    project_name = wandb_project if wandb_project is not None else config.wandb_project
+    if not config.use_wandb or not project_name:
+        disable_wandb()
+        return False
+
+    os.environ.pop("WANDB_DISABLED", None)
+    os.environ["WANDB_PROJECT"] = project_name
+
+    try:
+        import wandb
+
+        wandb.init(project=project_name, name=run_name)
+        logger.info("Weights & Biases logging enabled for project: %s", project_name)
+        return True
+    except Exception as exc:
+        logger.warning(
+            "Weights & Biases is unavailable (%s). Continuing without wandb logging.",
+            exc,
+        )
+        disable_wandb()
+        return False
 
 
 def train(
@@ -320,11 +360,7 @@ def train(
     logger.info("Starting training: %s", run_name)
     logger.info("%s", "=" * 60)
     
-    # Set up wandb
-    if wandb_project:
-        os.environ["WANDB_PROJECT"] = wandb_project
-        import wandb
-        wandb.init(project=wandb_project, name=run_name)
+    use_wandb = maybe_enable_wandb(config, run_name, wandb_project)
     
     # Load model and processor
     model_config = ModelConfig(
@@ -382,7 +418,7 @@ def train(
     )
     
     # Create training arguments
-    training_args = create_training_args(config, run_name)
+    training_args = create_training_args(config, run_name, use_wandb=use_wandb)
     
     # Create trainer
     trainer = Trainer(
@@ -512,6 +548,11 @@ def main():
         help="W&B project name"
     )
     parser.add_argument(
+        "--no_wandb",
+        action="store_true",
+        help="Disable Weights & Biases even if enabled in the config"
+    )
+    parser.add_argument(
         "--train_all",
         action="store_true",
         help="Train all experimental setups"
@@ -541,7 +582,13 @@ def main():
         config.batch_size = args.batch_size
     if args.use_secondary:
         config.use_secondary = True
-    
+    if args.wandb_project:
+        config.use_wandb = True
+        config.wandb_project = args.wandb_project
+    if args.no_wandb:
+        config.use_wandb = False
+        config.wandb_project = None
+
     # Run training
     if args.train_all:
         train_all_setups(config, args.wandb_project)

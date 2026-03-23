@@ -331,7 +331,7 @@ def main():
     st.markdown(
         """
         <div style="text-align: center; color: #888; font-size: 0.9rem;">
-        Built with ❤️ using Streamlit and HuggingFace Transformers
+        Built by Zinoviev Dmitry using Streamlit and HuggingFace Transformers
         </div>
         """,
         unsafe_allow_html=True

@@ -1,0 +1,447 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Handwritten Formula to LaTeX OCR - Experiments\n",
+    "\n",
+    "This notebook contains experiments for fine-tuning Vision-Language Models for handwritten formula recognition."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Setup"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Install dependencies (if needed)\n",
+    "# !pip install -q transformers datasets peft accelerate bitsandbytes\n",
+    "\n",
+    "import sys\n",
+    "sys.path.append('../src')\n",
+    "\n",
+    "import torch\n",
+    "from datasets import load_dataset\n",
+    "from PIL import Image\n",
+    "import matplotlib.pyplot as plt\n",
+    "from IPython.display import display, Latex\n",
+    "\n",
+    "print(f\"PyTorch version: {torch.__version__}\")\n",
+    "print(f\"CUDA available: {torch.cuda.is_available()}\")\n",
+    "if torch.cuda.is_available():\n",
+    "    print(f\"GPU: {torch.cuda.get_device_name(0)}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Dataset Exploration"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load LaTeX_OCR dataset\n",
+    "ds_latex_ocr = load_dataset(\"linxy/LaTeX_OCR\", \"human_handwrite\")\n",
+    "print(\"LaTeX_OCR dataset:\")\n",
+    "print(ds_latex_ocr)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Explore train split\n",
+    "train_ds = ds_latex_ocr['train']\n",
+    "print(f\"\\nTrain samples: {len(train_ds)}\")\n",
+    "print(f\"Columns: {train_ds.column_names}\")\n",
+    "print(f\"\\nFirst example:\")\n",
+    "print(train_ds[0])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Visualize some examples\n",
+    "fig, axes = plt.subplots(2, 3, figsize=(15, 8))\n",
+    "\n",
+    "for idx, ax in enumerate(axes.flat):\n",
+    "    example = train_ds[idx]\n",
+    "    image = example['image']\n",
+    "    latex = example.get('text') or example.get('latex', '')\n",
+    "    \n",
+    "    ax.imshow(image)\n",
+    "    ax.set_title(f\"LaTeX: {latex[:40]}...\" if len(latex) > 40 else f\"LaTeX: {latex}\")\n",
+    "    ax.axis('off')\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.savefig('../report/images/dataset_examples.png', dpi=150)\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load MathWriting dataset\n",
+    "ds_mathwriting = load_dataset(\"deepcopy/MathWriting-human\")\n",
+    "print(\"MathWriting dataset:\")\n",
+    "print(ds_mathwriting)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Analyze LaTeX formula lengths\n",
+    "import numpy as np\n",
+    "\n",
+    "latex_lengths = [len(ex.get('text', '') or ex.get('latex', '')) for ex in train_ds]\n",
+    "\n",
+    "plt.figure(figsize=(10, 4))\n",
+    "plt.hist(latex_lengths, bins=50, edgecolor='black')\n",
+    "plt.xlabel('LaTeX Length (characters)')\n",
+    "plt.ylabel('Count')\n",
+    "plt.title('Distribution of LaTeX Formula Lengths')\n",
+    "plt.axvline(np.mean(latex_lengths), color='r', linestyle='--', label=f'Mean: {np.mean(latex_lengths):.1f}')\n",
+    "plt.legend()\n",
+    "plt.savefig('../report/images/latex_length_distribution.png', dpi=150)\n",
+    "plt.show()\n",
+    "\n",
+    "print(f\"Mean length: {np.mean(latex_lengths):.1f}\")\n",
+    "print(f\"Max length: {max(latex_lengths)}\")\n",
+    "print(f\"Min length: {min(latex_lengths)}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Model Loading"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from model_utils import ModelConfig, load_model_and_processor, VLMForLatexOCR\n",
+    "\n",
+    "# Load model for inference\n",
+    "model_name = \"HuggingFaceTB/SmolVLM-256M-Instruct\"\n",
+    "\n",
+    "vlm = VLMForLatexOCR.from_pretrained(\n",
+    "    model_name,\n",
+    "    load_in_4bit=False\n",
+    ")\n",
+    "print(\"Model loaded successfully!\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Zero-shot Inference"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Test zero-shot on a few examples\n",
+    "test_ds = ds_latex_ocr['test']\n",
+    "\n",
+    "print(\"Zero-shot inference results:\")\n",
+    "print(\"=\" * 60)\n",
+    "\n",
+    "for i in range(5):\n",
+    "    example = test_ds[i]\n",
+    "    image = example['image']\n",
+    "    reference = example.get('text') or example.get('latex', '')\n",
+    "    \n",
+    "    prediction = vlm.generate(\n",
+    "        image=image,\n",
+    "        prompt=\"Convert this handwritten formula to LaTeX:\",\n",
+    "        max_new_tokens=256\n",
+    "    )\n",
+    "    \n",
+    "    print(f\"\\nExample {i+1}:\")\n",
+    "    print(f\"Reference:  {reference}\")\n",
+    "    print(f\"Prediction: {prediction}\")\n",
+    "    \n",
+    "    # Display image\n",
+    "    plt.figure(figsize=(6, 2))\n",
+    "    plt.imshow(image)\n",
+    "    plt.axis('off')\n",
+    "    plt.title(f\"Example {i+1}\")\n",
+    "    plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. One-shot Inference"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Test one-shot inference\n",
+    "print(\"One-shot inference results:\")\n",
+    "print(\"=\" * 60)\n",
+    "\n",
+    "for i in range(5):\n",
+    "    example = test_ds[i]\n",
+    "    image = example['image']\n",
+    "    reference = example.get('text') or example.get('latex', '')\n",
+    "    \n",
+    "    prediction = vlm.generate_with_one_shot(\n",
+    "        image=image,\n",
+    "        example_latex=\"x^2 + y^2 = z^2\",\n",
+    "        max_new_tokens=256\n",
+    "    )\n",
+    "    \n",
+    "    print(f\"\\nExample {i+1}:\")\n",
+    "    print(f\"Reference:  {reference}\")\n",
+    "    print(f\"Prediction: {prediction}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Training"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Training configuration\n",
+    "from train import TrainConfig, train\n",
+    "\n",
+    "config = TrainConfig(\n",
+    "    model_name=\"HuggingFaceTB/SmolVLM-256M-Instruct\",\n",
+    "    primary_subset=\"human_handwrite\",\n",
+    "    use_secondary=False,\n",
+    "    num_epochs=3,\n",
+    "    batch_size=4,\n",
+    "    learning_rate=2e-4,\n",
+    "    use_lora=True,\n",
+    "    lora_r=16,\n",
+    "    load_in_4bit=True,\n",
+    ")\n",
+    "\n",
+    "print(\"Training configuration:\")\n",
+    "for key, value in config.__dict__.items():\n",
+    "    print(f\"  {key}: {value}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Run training (uncomment to actually train)\n",
+    "# model, processor = train(config, run_name=\"notebook_experiment\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Evaluation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from evaluate import EvalConfig, run_full_evaluation\n",
+    "from metrics import compute_all_metrics, MetricTracker\n",
+    "\n",
+    "# Quick evaluation on a subset\n",
+    "tracker = MetricTracker()\n",
+    "\n",
+    "for i in range(10):\n",
+    "    example = test_ds[i]\n",
+    "    image = example['image']\n",
+    "    reference = example.get('text') or example.get('latex', '')\n",
+    "    \n",
+    "    prediction = vlm.generate(image=image)\n",
+    "    tracker.add(prediction, reference)\n",
+    "\n",
+    "print(\"Evaluation Results (10 samples):\")\n",
+    "print(tracker)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Results Visualization"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Placeholder for results visualization\n",
+    "# Fill in after running full evaluation\n",
+    "\n",
+    "results = {\n",
+    "    \"zero_shot\": {\"bleu\": 0.0, \"exact_match\": 0.0, \"edit_distance\": 0.0, \"token_f1\": 0.0},\n",
+    "    \"one_shot\": {\"bleu\": 0.0, \"exact_match\": 0.0, \"edit_distance\": 0.0, \"token_f1\": 0.0},\n",
+    "    \"sft_latex_ocr\": {\"bleu\": 0.0, \"exact_match\": 0.0, \"edit_distance\": 0.0, \"token_f1\": 0.0},\n",
+    "    \"sft_combined\": {\"bleu\": 0.0, \"exact_match\": 0.0, \"edit_distance\": 0.0, \"token_f1\": 0.0},\n",
+    "}\n",
+    "\n",
+    "# Plot results\n",
+    "import pandas as pd\n",
+    "\n",
+    "df = pd.DataFrame(results).T\n",
+    "\n",
+    "fig, axes = plt.subplots(1, 4, figsize=(16, 4))\n",
+    "\n",
+    "metrics = ['bleu', 'exact_match', 'edit_distance', 'token_f1']\n",
+    "titles = ['BLEU Score', 'Exact Match', 'Edit Distance', 'Token F1']\n",
+    "\n",
+    "for ax, metric, title in zip(axes, metrics, titles):\n",
+    "    df[metric].plot(kind='bar', ax=ax, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'])\n",
+    "    ax.set_title(title)\n",
+    "    ax.set_xlabel('')\n",
+    "    ax.set_ylabel('Score')\n",
+    "    ax.set_ylim(0, 1)\n",
+    "    ax.tick_params(axis='x', rotation=45)\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.savefig('../report/images/evaluation_results.png', dpi=150)\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 9. Error Analysis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Analyze common errors\n",
+    "from metrics import normalize_latex, tokenize_latex\n",
+    "\n",
+    "errors = []\n",
+    "\n",
+    "for i in range(min(20, len(test_ds))):\n",
+    "    example = test_ds[i]\n",
+    "    image = example['image']\n",
+    "    reference = example.get('text') or example.get('latex', '')\n",
+    "    \n",
+    "    prediction = vlm.generate(image=image)\n",
+    "    \n",
+    "    if normalize_latex(prediction) != normalize_latex(reference):\n",
+    "        errors.append({\n",
+    "            'index': i,\n",
+    "            'reference': reference,\n",
+    "            'prediction': prediction,\n",
+    "            'image': image\n",
+    "        })\n",
+    "\n",
+    "print(f\"Errors found: {len(errors)}/20\")\n",
+    "\n",
+    "# Show first few errors\n",
+    "for error in errors[:5]:\n",
+    "    print(f\"\\nError #{error['index']}:\")\n",
+    "    print(f\"  Reference:  {error['reference']}\")\n",
+    "    print(f\"  Prediction: {error['prediction']}\")\n",
+    "    plt.figure(figsize=(6, 2))\n",
+    "    plt.imshow(error['image'])\n",
+    "    plt.axis('off')\n",
+    "    plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 10. Save Results"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Save evaluation results\n",
+    "import json\n",
+    "\n",
+    "with open('../evaluation_results.json', 'w') as f:\n",
+    "    json.dump(results, f, indent=2)\n",
+    "\n",
+    "print(\"Results saved to evaluation_results.json\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}

@@ -18,7 +18,7 @@ class LatexOCRInference:
     
     def __init__(
         self,
-        model_name: str = "HuggingFaceTB/SmolVLM-256M-Instruct",
+        model_name: str = "Qwen/Qwen2-VL-2B-Instruct",
         adapter_path: Optional[str] = None,
         device: Optional[str] = None
     ):
@@ -105,7 +105,7 @@ class LatexOCRInference:
 
 def load_inference_model(
     checkpoint_path: Optional[str] = None,
-    model_name: str = "HuggingFaceTB/SmolVLM-256M-Instruct"
+    model_name: str = "Qwen/Qwen2-VL-2B-Instruct"
 ) -> LatexOCRInference:
     """
     Convenience function to load inference model.
@@ -126,7 +126,7 @@ def load_inference_model(
 def quick_inference(
     image_path: str,
     checkpoint_path: Optional[str] = None,
-    model_name: str = "HuggingFaceTB/SmolVLM-256M-Instruct"
+    model_name: str = "Qwen/Qwen2-VL-2B-Instruct"
 ) -> str:
     """
     Quick one-off inference.
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="HuggingFaceTB/SmolVLM-256M-Instruct",
+        default="Qwen/Qwen2-VL-2B-Instruct",
         help="Base model name"
     )
     parser.add_argument(

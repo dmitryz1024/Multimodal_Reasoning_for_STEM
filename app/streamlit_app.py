@@ -213,8 +213,8 @@ def main():
         st.header("Settings")
 
         model_options = {
-            "SmolVLM-256M (Fast)": "HuggingFaceTB/SmolVLM-256M-Instruct",
             "Qwen2-VL-2B (Accurate)": "Qwen/Qwen2-VL-2B-Instruct",
+            "SmolVLM-256M (Fast)": "HuggingFaceTB/SmolVLM-256M-Instruct",
         }
         selected_model = st.selectbox("Select Model", options=list(model_options.keys()), index=0)
         model_name = model_options[selected_model]

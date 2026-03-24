@@ -62,7 +62,8 @@ evaluation_results.json
 *.png
 *.jpg
 *.jpeg
-!report/images/*.png
+!demo/*.png
+!demo/*.jpg
 
 # OS
 .DS_Store

@@ -270,6 +270,11 @@ Suggested report attachments:
 - one screenshot with the input handwritten image
 - one screenshot with the generated LaTeX string
 - one screenshot with the rendered formula
+- one optional short screen recording of the Streamlit interaction
+
+Recommended location for demo assets:
+
+- [demo](c:/Users/user/Documents/projects/Multimodal_Reasoning_for_STEM/demo)
 
 ## 9. Checkpoints
 
@@ -308,6 +313,13 @@ Launching the demo:
 ```bash
 streamlit run app/streamlit_app.py
 ```
+
+Suggested filenames for demo assets stored in [demo](c:/Users/user/Documents/projects/Multimodal_Reasoning_for_STEM/demo):
+
+- `streamlit_input_photo.png`
+- `streamlit_prediction_text.png`
+- `streamlit_rendered_output.png`
+- `streamlit_demo.mp4`
 
 ## 11. Conclusion
 

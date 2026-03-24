@@ -1,34 +1,30 @@
 services:
   latex-ocr:
     build: .
-    # Note: GPU support requires Docker Desktop with GPU enabled
+    container_name: latex-ocr-app
     env_file:
       - .env
     environment:
       - CUDA_VISIBLE_DEVICES=0
-    volumes:
-      - .:/app  # Mount current directory for development
-      - ./checkpoints:/app/checkpoints  # Persist checkpoints
-      - ./report:/app/report  # Persist reports
-    ports:
-      - "8501:8501"  # Streamlit port
-    command: ["streamlit", "run", "app/streamlit_app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
-
-  # Optional: Training service
-  train:
-    build: .
-    env_file:
-      - .env
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    gpus: all
     volumes:
       - .:/app
       - ./checkpoints:/app/checkpoints
+      - ./demo:/app/demo
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "app/streamlit_app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+
+  train:
+    build: .
+    container_name: latex-ocr-train
+    env_file:
+      - .env
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    gpus: all
+    volumes:
+      - .:/app
+      - ./checkpoints:/app/checkpoints
+      - ./demo:/app/demo
     command: ["python", "-m", "src.train", "--config", "configs/train_config.qwen2vl_2b.yaml", "--run_name", "qwen2vl_latex_only"]

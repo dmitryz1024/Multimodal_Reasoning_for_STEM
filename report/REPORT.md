@@ -22,45 +22,45 @@ The model is small enough to fine-tune on a local 16 GB GPU while still supporti
 
 If `MathWriting-human` is subsampled, record the sample size here:
 
-- MathWriting sample size used: `____________`
+- MathWriting sample size used: `10000`
 
 ## 4. Experimental Setup
 
 Hardware:
 
-- GPU: `____________`
-- VRAM: `____________`
-- RAM: `____________`
+- GPU: `5060ti`
+- VRAM: `16.6 GB`
+- RAM: `128 GB`
 
 Software:
 
-- OS: `____________`
-- Python: `____________`
+- OS: `debian`
+- Python: `3.10`
 - PyTorch: `____________`
 - CUDA: `____________`
 
 Training hyperparameters:
 
-- Epochs: `____________`
-- Per-device train batch size: `____________`
-- Per-device eval batch size: `____________`
-- Gradient accumulation steps: `____________`
-- Learning rate: `____________`
-- Weight decay: `____________`
-- Warmup ratio: `____________`
-- Max sequence length: `____________`
+- Epochs: `3`
+- Per-device train batch size: `2`
+- Per-device eval batch size: `2`
+- Gradient accumulation steps: `8`
+- Learning rate: `2.0e-4`
+- Weight decay: `0.01`
+- Warmup ratio: `0.03`
+- Max sequence length: `512`
 - Precision mode: `____________`
-- Gradient checkpointing: `____________`
+- Gradient checkpointing: `true`
 
 Checkpoint paths:
 
-- SFT LaTeX_OCR only: `____________`
-- SFT LaTeX_OCR + MathWriting: `____________`
+- SFT LaTeX_OCR only: `.\checkpoints\sft_latex_ocr_only`
+- SFT LaTeX_OCR + MathWriting: `.\checkpoints\sft_latex_ocr_mathwriting`
 
 Public checkpoint links:
 
-- SFT LaTeX_OCR only: `____________`
-- SFT LaTeX_OCR + MathWriting: `____________`
+- SFT LaTeX_OCR only: `https://huggingface.co/dmitryz1024/latex-ocr-smolvlm-latex-only`
+- SFT LaTeX_OCR + MathWriting: `https://huggingface.co/dmitryz1024/latex-ocr-smolvlm-combined`
 
 ## 5. Evaluation Metric
 

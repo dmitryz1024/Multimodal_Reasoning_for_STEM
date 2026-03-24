@@ -206,6 +206,7 @@ class LatexOCRDataCollator:
     def __call__(self, batch: list) -> Dict[str, torch.Tensor]:
         images = []
         texts = []
+        prompt_texts = []
         
         for example in batch:
             # Get image
@@ -239,6 +240,23 @@ class LatexOCRDataCollator:
                 add_generation_prompt=False
             )
             texts.append(text)
+
+            # Prompt-only conversation used to mask loss on the user/input side.
+            prompt_messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": "Convert this handwritten formula to LaTeX:"}
+                    ]
+                }
+            ]
+            prompt_text = self.processor.apply_chat_template(
+                prompt_messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            prompt_texts.append(prompt_text)
         
         # Process batch
         batch_encoding = self.processor(
@@ -250,9 +268,23 @@ class LatexOCRDataCollator:
             max_length=self.max_length,
         )
         
-        # Create labels (same as input_ids but with padding tokens masked)
+        # Create labels and mask everything except the assistant answer tokens.
         labels = batch_encoding["input_ids"].clone()
-        labels[labels == self.processor.tokenizer.pad_token_id] = -100
+        pad_token_id = self.processor.tokenizer.pad_token_id
+
+        for idx, (image, prompt_text) in enumerate(zip(images, prompt_texts)):
+            prompt_encoding = self.processor(
+                images=image,
+                text=prompt_text,
+                return_tensors="pt",
+                padding=False,
+                truncation=False,
+                max_length=self.max_length,
+            )
+            prompt_len = prompt_encoding["input_ids"].shape[1]
+            labels[idx, :prompt_len] = -100
+
+        labels[labels == pad_token_id] = -100
         batch_encoding["labels"] = labels
         
         return batch_encoding

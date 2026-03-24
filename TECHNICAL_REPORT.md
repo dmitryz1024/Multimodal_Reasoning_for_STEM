@@ -232,7 +232,7 @@ Demo assets:
 - input image: [streamlit_input_photo.jpg](demo/streamlit_input_photo.jpg)
 - generated LaTeX file: [streamlit_prediction_text.tex](demo/streamlit_prediction_text.tex)
 - rendered output image: [streamlit_rendered_output.png](demo/streamlit_rendered_output.png)
-- screen recording: [streamlit_demo.mp4](demo/streamlit_demo.mp4)
+- screen recording: [streamlit_demo.mp4](demo/streamlit_demo.mp4) (or [streamlit_demo.mp4](https://drive.google.com/file/d/11MqjNenj_amuH5jHL_l3ICaU0tSxPOVe/view?usp=sharing))
 
 Input handwritten photo:
 

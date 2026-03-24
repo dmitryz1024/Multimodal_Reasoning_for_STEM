@@ -38,7 +38,11 @@ env/
 *.ipynb_checkpoints
 
 # Model checkpoints
-
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
 
 # Datasets (downloaded locally)
 data/

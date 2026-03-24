@@ -24,9 +24,6 @@ A vision-language project for converting handwritten mathematical formulas into 
 |   `-- train.py
 |-- app/
 |   `-- streamlit_app.py
-|-- notebooks/
-|   |-- colab_training.ipynb
-|   `-- experiments.ipynb
 |-- scripts/
 |   `-- upload_to_hub.py
 `-- report/
@@ -39,7 +36,6 @@ A vision-language project for converting handwritten mathematical formulas into 
 - Training via `python -m src.train`
 - Evaluation via `python -m src.evaluate`
 - Streamlit app via `streamlit run app/streamlit_app.py`
-- Local Jupyter notebooks from `notebooks/`
 - Docker image build and Docker Compose services
 
 ## Requirements
@@ -195,19 +191,6 @@ For the internship demo, keep the checkpoint path pointed at one of your fine-tu
 
 If you use private/gated Hugging Face assets, set `HF_TOKEN` in your environment before launch.
 
-## Jupyter Notebooks
-
-The notebooks are adapted for local execution:
-
-- `notebooks/colab_training.ipynb`
-- `notebooks/experiments.ipynb`
-
-Start Jupyter from the repository root:
-
-```bash
-jupyter lab
-```
-
 ## Docker
 
 Build the image:
@@ -227,7 +210,7 @@ Run training:
 
 ```bash
 docker run --gpus all -v $(pwd):/app latex-ocr \
-  python -m src.train --config configs/train_config.yaml
+  python -m src.train --config configs/train_config.local_gpu.yaml
 ```
 
 Docker Compose:
@@ -235,6 +218,12 @@ Docker Compose:
 ```bash
 docker compose up latex-ocr
 docker compose up train
+```
+
+Depending on your Docker setup, you may also need:
+
+```bash
+docker compose run --rm train python -m src.train --config configs/train_config.local_gpu.yaml
 ```
 
 ## Uploading Trained Checkpoints

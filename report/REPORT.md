@@ -105,7 +105,7 @@ Add 2-4 examples with:
 Suggested files to include from the repo:
 
 - `report/images/dataset_examples.png`
-- screenshots from notebook qualitative examples
+- screenshots from qualitative evaluation runs
 - screenshots from the Streamlit app
 
 ## 8. Streamlit Application

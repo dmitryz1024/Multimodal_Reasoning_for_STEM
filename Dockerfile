@@ -31,6 +31,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+# Установить Python и зависимости
+RUN apt-get update && apt-get install -y python3.10 python3-pip && \
+    apt-get install -y libsm6 libxext6 libxrender-dev git wget curl
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install --upgrade pip && pip3 install -r requirements.txt
+COPY . .
+
 # Create directories for checkpoints and outputs
 RUN mkdir -p checkpoints report/images
 

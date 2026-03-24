@@ -31,4 +31,4 @@ services:
     volumes:
       - .:/app
       - ./checkpoints:/app/checkpoints
-    command: ["python", "-m", "src.train", "--config", "configs/train_config.yaml"]
+    command: ["python", "-m", "src.train", "--config", "configs/train_config.qwen2vl_2b.yaml", "--run_name", "qwen2vl_latex_only"]

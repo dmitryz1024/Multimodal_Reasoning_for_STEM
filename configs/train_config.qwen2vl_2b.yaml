@@ -1,9 +1,8 @@
-# Safer preset for a local 16 GB GPU workstation.
-# Keeps the effective batch size equal to the default config:
-# 2 per-device * 8 grad accumulation = 16 effective batch size.
+# Starter config for Qwen2-VL-2B fine-tuning.
+# This is intended as a safer first run after the failed SmolVLM experiments.
 
 model:
-  name: "HuggingFaceTB/SmolVLM-256M-Instruct"
+  name: "Qwen/Qwen2-VL-2B-Instruct"
   use_lora: true
   lora_r: 16
   lora_alpha: 32
@@ -21,20 +20,20 @@ data:
   primary_subset: "human_handwrite"
   secondary_dataset: "deepcopy/MathWriting-human"
   use_secondary: false
-  secondary_sample_size: 10000
+  secondary_sample_size: 2000
   max_samples_train: null
   max_samples_val: null
   test_subset: "human_handwrite"
 
 training:
   output_dir: "./checkpoints"
-  num_epochs: 3
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 2
-  gradient_accumulation_steps: 8
-  learning_rate: 2.0e-4
+  num_epochs: 2
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 4
+  learning_rate: 1.0e-5
   weight_decay: 0.01
-  warmup_ratio: 0.03
+  warmup_ratio: 0.05
   lr_scheduler_type: "cosine"
   max_grad_norm: 1.0
   fp16: false
@@ -42,13 +41,13 @@ training:
   gradient_checkpointing: true
   save_strategy: "epoch"
   eval_strategy: "epoch"
-  logging_steps: 10
-  save_total_limit: 3
+  logging_steps: 5
+  save_total_limit: 2
   load_best_model_at_end: true
   metric_for_best_model: "eval_loss"
   greater_is_better: false
   seed: 42
 
 preprocessing:
-  max_length: 512
+  max_length: 2048
   image_size: 384

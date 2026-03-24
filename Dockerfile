@@ -49,4 +49,4 @@ RUN mkdir -p checkpoints report/images
 EXPOSE 8501
 
 # Default command
-CMD ["python", "-m", "src.train", "--config", "configs/train_config.yaml"]
+CMD ["python", "-m", "src.train", "--config", "configs/train_config.qwen2vl_2b.yaml", "--run_name", "qwen2vl_latex_only"]

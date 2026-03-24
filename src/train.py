@@ -202,6 +202,8 @@ class LatexOCRDataCollator:
         self.processor = processor
         self.max_length = max_length
         self.system_prompt = "Convert the handwritten mathematical formula to LaTeX code."
+        self._logged_sequence_truncation = False
+        self._logged_answer_truncation = False
     
     def __call__(self, batch: list) -> Dict[str, torch.Tensor]:
         images = []
@@ -265,8 +267,23 @@ class LatexOCRDataCollator:
             return_tensors="pt",
             padding=True,
             truncation=False,  # Disable truncation to avoid image token mismatch
-            max_length=self.max_length,
         )
+
+        # Some multimodal processors ignore max_length when truncation=False.
+        # To keep training stable, clip sequence-shaped tensors manually.
+        sequence_length = batch_encoding["input_ids"].shape[1]
+        if sequence_length > self.max_length:
+            for key, value in list(batch_encoding.items()):
+                if isinstance(value, torch.Tensor) and value.ndim >= 2 and value.shape[1] == sequence_length:
+                    batch_encoding[key] = value[:, :self.max_length]
+            if not self._logged_sequence_truncation:
+                logger.warning(
+                    "Processor returned sequence length %s while max_length=%s. "
+                    "Clipping sequence tensors manually inside the collator.",
+                    sequence_length,
+                    self.max_length,
+                )
+                self._logged_sequence_truncation = True
         
         # Create labels and mask everything except the assistant answer tokens.
         labels = batch_encoding["input_ids"].clone()
@@ -279,10 +296,17 @@ class LatexOCRDataCollator:
                 return_tensors="pt",
                 padding=False,
                 truncation=False,
-                max_length=self.max_length,
             )
-            prompt_len = prompt_encoding["input_ids"].shape[1]
+            prompt_len = min(prompt_encoding["input_ids"].shape[1], labels.shape[1])
             labels[idx, :prompt_len] = -100
+            if prompt_len >= labels.shape[1] and not self._logged_answer_truncation:
+                logger.warning(
+                    "Prompt length reached the clipped sequence length (%s tokens). "
+                    "No assistant tokens remain for loss on at least one example. "
+                    "Increase max_length to keep the target LaTeX inside the window.",
+                    labels.shape[1],
+                )
+                self._logged_answer_truncation = True
 
         labels[labels == pad_token_id] = -100
         batch_encoding["labels"] = labels
@@ -529,7 +553,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/train_config.yaml",
+        default="configs/train_config.qwen2vl_2b.yaml",
         help="Path to config file"
     )
     parser.add_argument(

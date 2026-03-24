@@ -1,6 +1,7 @@
 # Handwritten Formula to LaTeX Converter
 
 A vision-language project for converting handwritten mathematical formulas into LaTeX.
+The full usage scenario for my project from A to Z will be described below. The technical report on the task can be found in the file TECHNICAL_REPORT.md
 
 ## Project Structure
 
@@ -10,10 +11,9 @@ A vision-language project for converting handwritten mathematical formulas into 
 |-- docker-compose.yml
 |-- README.md
 |-- requirements.txt
-|-- setup.py
+|-- TRAINING_REPORT.md
 |-- configs/
-|   |-- train_config.yaml
-|   `-- train_config.local_gpu.yaml
+|   `-- train_config.qwen2vl_2b.yaml
 |-- src/
 |   |-- __init__.py
 |   |-- data_utils.py
@@ -26,12 +26,9 @@ A vision-language project for converting handwritten mathematical formulas into 
 |   `-- streamlit_app.py
 |-- scripts/
 |   `-- upload_to_hub.py
-`-- report/
-    |-- REPORT.md
-    `-- images/
 ```
 
-## What Works Today
+## Functions
 
 - Training via `python -m src.train`
 - Evaluation via `python -m src.evaluate`
@@ -95,38 +92,38 @@ huggingface-cli login
 Default training:
 
 ```bash
-python -m src.train --config configs/train_config.yaml
+python -m src.train --config configs/train_config.qwen2vl_2b.yaml --run_name qwen2vl_latex_only
 ```
 
-Safer local 16 GB GPU preset:
+Combined training:
 
 ```bash
-python -m src.train --config configs/train_config.local_gpu.yaml --run_name local_gpu_run
+python -m src.train --config configs/train_config.qwen2vl_2b.yaml --use_secondary --run_name qwen2vl_combined
 ```
 
 Explicitly disable wandb from the CLI even if a config enables it:
 
 ```bash
-python -m src.train --config configs/train_config.yaml --no_wandb
+python -m src.train --config configs/train_config.qwen2vl_2b.yaml --no_wandb
 ```
 
 Training with CLI overrides:
 
 ```bash
 python -m src.train \
-  --config configs/train_config.local_gpu.yaml \
-  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
+  --config configs/train_config.qwen2vl_2b.yaml \
+  --model_name "Qwen/Qwen2-VL-2B-Instruct" \
   --dataset "linxy/LaTeX_OCR" \
   --subset "human_handwrite" \
-  --epochs 3 \
-  --batch_size 2 \
+  --epochs 2 \
+  --batch_size 1 \
   --run_name custom_run
 ```
 
 Train both experimental setups:
 
 ```bash
-python -m src.train --config configs/train_config.local_gpu.yaml --train_all
+python -m src.train --config configs/train_config.qwen2vl_2b.yaml --train_all
 ```
 
 Notes:
@@ -142,8 +139,8 @@ Evaluate a single adapter checkpoint:
 
 ```bash
 python -m src.evaluate \
-  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
-  --adapter_path ./checkpoints/local_gpu_run/final \
+  --model_name "Qwen/Qwen2-VL-2B-Instruct" \
+  --adapter_path ./checkpoints/qwen2vl_latex_only/final \
   --dataset "linxy/LaTeX_OCR" \
   --subset "human_handwrite" \
   --eval_mode sft \
@@ -154,9 +151,9 @@ Run full evaluation across zero-shot, one-shot, and available fine-tuned checkpo
 
 ```bash
 python -m src.evaluate \
-  --model_name "HuggingFaceTB/SmolVLM-256M-Instruct" \
-  --checkpoint_latex_ocr ./checkpoints/sft_latex_ocr_only/final \
-  --checkpoint_combined ./checkpoints/sft_latex_ocr_mathwriting/final \
+  --model_name "Qwen/Qwen2-VL-2B-Instruct" \
+  --checkpoint_latex_ocr ./checkpoints/qwen2vl_latex_only/final \
+  --checkpoint_combined ./checkpoints/qwen2vl_combined/final \
   --dataset "linxy/LaTeX_OCR" \
   --subset "human_handwrite" \
   --eval_mode all
@@ -167,15 +164,15 @@ python -m src.evaluate \
 Command line inference:
 
 ```bash
-python -m src.inference path/to/image.png --model "HuggingFaceTB/SmolVLM-256M-Instruct"
+python -m src.inference path/to/image.png --model "Qwen/Qwen2-VL-2B-Instruct"
 ```
 
 With a fine-tuned checkpoint:
 
 ```bash
 python -m src.inference path/to/image.png \
-  --model "HuggingFaceTB/SmolVLM-256M-Instruct" \
-  --checkpoint ./checkpoints/local_gpu_run/final
+  --model "Qwen/Qwen2-VL-2B-Instruct" \
+  --checkpoint ./checkpoints/qwen2vl_latex_only/final
 ```
 
 ## Streamlit App
@@ -210,7 +207,7 @@ Run training:
 
 ```bash
 docker run --gpus all -v $(pwd):/app latex-ocr \
-  python -m src.train --config configs/train_config.local_gpu.yaml
+  python -m src.train --config configs/train_config.qwen2vl_2b.yaml --run_name qwen2vl_latex_only
 ```
 
 Docker Compose:
@@ -223,7 +220,7 @@ docker compose up train
 Depending on your Docker setup, you may also need:
 
 ```bash
-docker compose run --rm train python -m src.train --config configs/train_config.local_gpu.yaml
+docker compose run --rm train python -m src.train --config configs/train_config.qwen2vl_2b.yaml --run_name qwen2vl_latex_only
 ```
 
 ## Uploading Trained Checkpoints
@@ -232,19 +229,19 @@ If your `.env` already contains `HF_TOKEN`, you can publish checkpoints with:
 
 ```bash
 python scripts/upload_to_hub.py \
-  --local_path ./checkpoints/sft_latex_ocr_only/final \
-  --repo_id YOUR_USERNAME/latex-ocr-smolvlm-latex-only
+  --local_path ./checkpoints/qwen2vl_latex_only/final \
+  --repo_id YOUR_USERNAME/qwen2vl-latex-ocr
 ```
 
 and
 
 ```bash
 python scripts/upload_to_hub.py \
-  --local_path ./checkpoints/sft_latex_ocr_mathwriting/final \
-  --repo_id YOUR_USERNAME/latex-ocr-smolvlm-combined
+  --local_path ./checkpoints/qwen2vl_combined/final \
+  --repo_id YOUR_USERNAME/qwen2vl-latex-ocr-combined
 ```
 
-After upload, put the public model links into this README and into `report/REPORT.md`.
+After upload, put the public model links into this README and into `TRAINING_REPORT.md`.
 
 ## Datasets
 
@@ -255,19 +252,10 @@ After upload, put the public model links into this README and into `report/REPOR
 
 Tested/default model:
 
-- `HuggingFaceTB/SmolVLM-256M-Instruct`
+- `Qwen/Qwen2-VL-2B-Instruct`
 
 Also referenced in the code:
 
-- `Qwen/Qwen2-VL-2B-Instruct`
 - `Qwen/Qwen2.5-VL-3B-Instruct`
+- `HuggingFaceTB/SmolVLM-256M-Instruct`
 
-## Known Gaps
-
-- `setup.py` does not yet mirror the full dependency set from `requirements.txt`.
-- Custom datasets must follow the same column conventions expected by the preprocessing code.
-- You still need to fill in the final public checkpoint links after uploading trained runs.
-
-## License
-
-MIT License
